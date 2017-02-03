@@ -137,11 +137,15 @@ export abstract class Embed {
     this.config.id = this.getId();
     this.config.uniqueId = this.getUniqueId();
 
-    const iframeHtml = `<iframe style="width:100%;height:100%;" src="${this.config.embedUrl}" scrolling="no" allowfullscreen="true"></iframe>`;
-
-    this.element.innerHTML = iframeHtml;
-    this.iframe = <HTMLIFrameElement>this.element.childNodes[0];
-    this.iframe.addEventListener('load', () => this.load(this.config), false);
+    var iframe = <HTMLIFrameElement>document.createElement('iframe');
+    iframe.setAttribute('style', 'width:100%;height:100%;');
+    iframe.setAttribute('src', this.config.embedUrl);
+    iframe.setAttribute('scrolling', 'no');
+    iframe.setAttribute('allowfullscreen', 'true');    
+    iframe.addEventListener('load', () => this.load(this.config), false);    
+    this.iframe = iframe;
+    
+    this.element.appendChild(iframe);
   }
 
   /**

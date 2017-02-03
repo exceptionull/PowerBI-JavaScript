@@ -75,7 +75,7 @@
   },
   "dependencies": {
     "http-post-message": "^0.2.3",
-    "powerbi-models": "^0.10.1",
+    "powerbi-models": "https://github.com/exceptionull/powerbi-models/archive/498db56487b1e2aa7c8405fd278c96e6a83ab415.tar.gz",
     "powerbi-router": "^0.1.4",
     "window-post-message-proxy": "^0.2.4"
   },
