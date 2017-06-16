@@ -1,4 +1,4 @@
-/*! powerbi-client v2.2.6 | (c) 2016 Microsoft Corporation MIT */
+/*! powerbi-client v2.3.1 | (c) 2016 Microsoft Corporation MIT */
 (function webpackUniversalModuleDefinition(root, factory) {
 	if(typeof exports === 'object' && typeof module === 'object')
 		module.exports = factory();
@@ -53,17 +53,17 @@ return /******/ (function(modules) { // webpackBootstrap
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	var service = __webpack_require__(1);
 	exports.service = service;
-	var factories = __webpack_require__(9);
+	var factories = __webpack_require__(10);
 	exports.factories = factories;
 	var models = __webpack_require__(5);
 	exports.models = models;
 	var report_1 = __webpack_require__(4);
 	exports.Report = report_1.Report;
-	var tile_1 = __webpack_require__(8);
+	var tile_1 = __webpack_require__(9);
 	exports.Tile = tile_1.Tile;
 	var embed_1 = __webpack_require__(2);
 	exports.Embed = embed_1.Embed;
@@ -78,14 +78,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	window.powerbi = powerbi;
 
 
-/***/ },
+/***/ }),
 /* 1 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	var embed = __webpack_require__(2);
 	var report_1 = __webpack_require__(4);
-	var dashboard_1 = __webpack_require__(7);
-	var tile_1 = __webpack_require__(8);
+	var create_1 = __webpack_require__(7);
+	var dashboard_1 = __webpack_require__(8);
+	var tile_1 = __webpack_require__(9);
 	var page_1 = __webpack_require__(6);
 	var utils = __webpack_require__(3);
 	/**
@@ -148,6 +149,20 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	    }
 	    /**
+	     * Creates new report
+	     * @param {HTMLElement} element
+	     * @param {embed.IEmbedConfiguration} [config={}]
+	     * @returns {embed.Embed}
+	     */
+	    Service.prototype.createReport = function (element, config) {
+	        config.type = 'create';
+	        var powerBiElement = element;
+	        var component = new create_1.Create(this, powerBiElement, config);
+	        powerBiElement.powerBiEmbed = component;
+	        this.addOrOverwriteEmbed(component, element);
+	        return component;
+	    };
+	    /**
 	     * TODO: Add a description here
 	     *
 	     * @param {HTMLElement} [container]
@@ -203,7 +218,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	        var component = new Component(this, element, config);
 	        element.powerBiEmbed = component;
-	        this.embeds.push(component);
+	        this.addOrOverwriteEmbed(component, element);
 	        return component;
 	    };
 	    /**
@@ -225,6 +240,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	         * then we can call the embedNew function which would allow setting the proper embedUrl and construction of object based on the new type.
 	         */
 	        if (typeof config.type === "string" && config.type !== component.config.type) {
+	            /**
+	             * When loading report after create we want to use existing Iframe to optimize load period
+	             */
+	            if (config.type === "report" && component.config.type === "create") {
+	                var report = new report_1.Report(this, element, config, element.powerBiEmbed.iframe);
+	                report.load(config);
+	                element.powerBiEmbed = report;
+	                this.addOrOverwriteEmbed(component, element);
+	                return report;
+	            }
 	            throw new Error("Embedding on an existing element with a different type than the previous embed object is not supported.  Attempted to embed using config " + JSON.stringify(config) + " on element " + element.outerHTML + ", but the existing element contains an embed of type: " + this.config.type + " which does not match the new type: " + config.type);
 	        }
 	        component.load(config);
@@ -263,6 +288,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	    Service.prototype.find = function (uniqueId) {
 	        return utils.find(function (x) { return x.config.uniqueId === uniqueId; }, this.embeds);
 	    };
+	    Service.prototype.addOrOverwriteEmbed = function (component, element) {
+	        // remove embeds over the same div element.
+	        this.embeds = this.embeds.filter(function (embed) {
+	            return embed.element.id !== element.id;
+	        });
+	        this.embeds.push(component);
+	    };
 	    /**
 	     * Given an HTML element that has a component embedded within it, removes the component from the list of embedded components, removes the association between the element and the component, and removes the iframe.
 	     *
@@ -281,7 +313,23 @@ return /******/ (function(modules) { // webpackBootstrap
 	        /** Removes the iframe from the element. */
 	        var iframe = element.querySelector('iframe');
 	        if (iframe) {
-	            iframe.remove();
+	            if (iframe.remove !== undefined) {
+	                iframe.remove();
+	            }
+	            else {
+	                /** Workaround for IE: unhandled rejection TypeError: object doesn't support propert or method 'remove' */
+	                iframe.parentElement.removeChild(iframe);
+	            }
+	        }
+	    };
+	    /**
+	     * handles tile events
+	     *
+	     * @param {IEvent<any>} event
+	     */
+	    Service.prototype.handleTileEvents = function (event) {
+	        if (event.type === 'tile') {
+	            this.handleEvent(event);
 	        }
 	    };
 	    /**
@@ -292,8 +340,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	     */
 	    Service.prototype.handleEvent = function (event) {
 	        var embed = utils.find(function (embed) {
-	            return (embed.config.type === event.type
-	                && embed.config.uniqueId === event.id);
+	            return (embed.config.uniqueId === event.id);
 	        }, this.embeds);
 	        if (embed) {
 	            var value = event.value;
@@ -334,9 +381,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.Service = Service;
 
 
-/***/ },
+/***/ }),
 /* 2 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	var utils = __webpack_require__(3);
 	/**
@@ -357,29 +404,74 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * @param {HTMLElement} element
 	     * @param {IEmbedConfiguration} config
 	     */
-	    function Embed(service, element, config) {
-	        var _this = this;
+	    function Embed(service, element, config, iframe) {
 	        this.allowedEvents = [];
 	        Array.prototype.push.apply(this.allowedEvents, Embed.allowedEvents);
 	        this.eventHandlers = [];
 	        this.service = service;
 	        this.element = element;
-	        // TODO: Change when Object.assign is available.
-	        var settings = utils.assign({}, Embed.defaultSettings, config.settings);
-	        this.config = utils.assign({ settings: settings }, config);
-	        this.config.accessToken = this.getAccessToken(service.accessToken);
-	        this.config.embedUrl = this.getEmbedUrl();
-	        this.config.id = this.getId();
-	        this.config.uniqueId = this.getUniqueId();
-	        var iframe = document.createElement('iframe');
-	        iframe.setAttribute('style', 'width:100%;height:100%;');
-	        iframe.setAttribute('src', this.config.embedUrl);
-	        iframe.setAttribute('scrolling', 'no');
-	        iframe.setAttribute('allowfullscreen', 'true');
-	        iframe.addEventListener('load', function () { return _this.load(_this.config); }, false);
 	        this.iframe = iframe;
-	        this.element.appendChild(iframe);
+	        this.embeType = config.type.toLowerCase();
+	        this.populateConfig(config);
+	        if (this.embeType === 'create') {
+	            this.setIframe(false /*set EventListener to call create() on 'load' event*/);
+	        }
+	        else {
+	            this.setIframe(true /*set EventListener to call load() on 'load' event*/);
+	        }
 	    }
+	    /**
+	     * Sends createReport configuration data.
+	     *
+	     * ```javascript
+	     * createReport({
+	     *   datasetId: '5dac7a4a-4452-46b3-99f6-a25915e0fe55',
+	     *   accessToken: 'eyJ0eXA ... TaE2rTSbmg',
+	     * ```
+	     *
+	     * @param {models.IReportCreateConfiguration} config
+	     * @returns {Promise<void>}
+	     */
+	    Embed.prototype.createReport = function (config) {
+	        var errors = this.validate(config);
+	        if (errors) {
+	            throw errors;
+	        }
+	        return this.service.hpm.post("/report/create", config, { uid: this.config.uniqueId }, this.iframe.contentWindow)
+	            .then(function (response) {
+	            return response.body;
+	        }, function (response) {
+	            throw response.body;
+	        });
+	    };
+	    /**
+	     * Saves Report.
+	     *
+	     * @returns {Promise<void>}
+	     */
+	    Embed.prototype.save = function () {
+	        return this.service.hpm.post('/report/save', null, { uid: this.config.uniqueId }, this.iframe.contentWindow)
+	            .then(function (response) {
+	            return response.body;
+	        })
+	            .catch(function (response) {
+	            throw response.body;
+	        });
+	    };
+	    /**
+	     * SaveAs Report.
+	     *
+	     * @returns {Promise<void>}
+	     */
+	    Embed.prototype.saveAs = function (saveAsParameters) {
+	        return this.service.hpm.post('/report/saveAs', saveAsParameters, { uid: this.config.uniqueId }, this.iframe.contentWindow)
+	            .then(function (response) {
+	            return response.body;
+	        })
+	            .catch(function (response) {
+	            throw response.body;
+	        });
+	    };
 	    /**
 	     * Sends load configuration data.
 	     *
@@ -491,6 +583,20 @@ return /******/ (function(modules) { // webpackBootstrap
 	        return this.load(this.config);
 	    };
 	    /**
+	     * Set accessToken.
+	     *
+	     * @returns {Promise<void>}
+	     */
+	    Embed.prototype.setAccessToken = function (accessToken) {
+	        return this.service.hpm.post('/report/token', accessToken, { uid: this.config.uniqueId }, this.iframe.contentWindow)
+	            .then(function (response) {
+	            return response.body;
+	        })
+	            .catch(function (response) {
+	            throw response.body;
+	        });
+	    };
+	    /**
 	     * Gets an access token from the first available location: config, attribute, global.
 	     *
 	     * @private
@@ -503,6 +609,37 @@ return /******/ (function(modules) { // webpackBootstrap
 	            throw new Error("No access token was found for element. You must specify an access token directly on the element using attribute '" + Embed.accessTokenAttribute + "' or specify a global token at: powerbi.accessToken.");
 	        }
 	        return accessToken;
+	    };
+	    /**
+	     * Populate config for create and load
+	     *
+	     * @private
+	     * @param {IEmbedConfiguration}
+	     * @returns {void}
+	     */
+	    Embed.prototype.populateConfig = function (config) {
+	        // TODO: Change when Object.assign is available.
+	        var settings = utils.assign({}, Embed.defaultSettings, config.settings);
+	        this.config = utils.assign({ settings: settings }, config);
+	        this.config.uniqueId = this.getUniqueId();
+	        this.config.embedUrl = this.getEmbedUrl();
+	        if (this.embeType === 'create') {
+	            this.createConfig = {
+	                datasetId: config.datasetId || this.getId(),
+	                accessToken: this.getAccessToken(this.service.accessToken),
+	                tokenType: config.tokenType,
+	                settings: settings
+	            };
+	        }
+	        else {
+	            this.config.id = this.getId();
+	            this.config.accessToken = this.getAccessToken(this.service.accessToken);
+	            if (this.embeType == 'tile') {
+	                this.config.action = config.action;
+	                this.config.height = config.height;
+	                this.config.width = config.width;
+	            }
+	        }
 	    };
 	    /**
 	     * Gets an embed url from the first available location: options, attribute.
@@ -556,7 +693,33 @@ return /******/ (function(modules) { // webpackBootstrap
 	        var options = ['fullscreenElement', 'webkitFullscreenElement', 'mozFullscreenScreenElement', 'msFullscreenElement'];
 	        return options.some(function (option) { return document[option] === iframe; });
 	    };
-	    Embed.allowedEvents = ["loaded"];
+	    /**
+	     * Sets Iframe for embed
+	     */
+	    Embed.prototype.setIframe = function (isLoad) {
+	        var _this = this;
+	        if (!this.iframe) {
+	            var iframeContent = document.createElement("iframe");
+	            var embedUrl = this.config.embedUrl;
+	            iframeContent.setAttribute("style", "width:100%;height:100%;");
+	            iframeContent.setAttribute("src", embedUrl);
+	            iframeContent.setAttribute("scrolling", "no");
+	            iframeContent.setAttribute("allowfullscreen", "true");
+	            var node = this.element;
+	            while (node.firstChild) {
+	                node.removeChild(node.firstChild);
+	            }
+	            node.appendChild(iframeContent);
+	            this.iframe = node.firstChild;
+	        }
+	        if (isLoad) {
+	            this.iframe.addEventListener('load', function () { return _this.load(_this.config); }, false);
+	        }
+	        else {
+	            this.iframe.addEventListener('load', function () { return _this.createReport(_this.createConfig); }, false);
+	        }
+	    };
+	    Embed.allowedEvents = ["loaded", "saved", "rendered", "saveAsTriggered", "error", "dataSelected"];
 	    Embed.accessTokenAttribute = 'powerbi-access-token';
 	    Embed.embedUrlAttribute = 'powerbi-embed-url';
 	    Embed.nameAttribute = 'powerbi-name';
@@ -569,9 +732,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.Embed = Embed;
 
 
-/***/ },
+/***/ }),
 /* 3 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/**
 	 * Raises a custom event with event data on the specified HTML element.
@@ -684,9 +847,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.createRandomString = createRandomString;
 
 
-/***/ },
+/***/ }),
 /* 4 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	var __extends = (this && this.__extends) || function (d, b) {
 	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -715,7 +878,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * @param {HTMLElement} element
 	     * @param {embed.IEmbedConfiguration} config
 	     */
-	    function Report(service, element, config) {
+	    function Report(service, element, config, iframe) {
 	        var filterPaneEnabled = (config.settings && config.settings.filterPaneEnabled) || !(element.getAttribute(Report.filterPaneEnabledAttribute) === "false");
 	        var navContentPaneEnabled = (config.settings && config.settings.navContentPaneEnabled) || !(element.getAttribute(Report.navContentPaneEnabledAttribute) === "false");
 	        var settings = utils.assign({
@@ -723,7 +886,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            navContentPaneEnabled: navContentPaneEnabled
 	        }, config.settings);
 	        var configCopy = utils.assign({ settings: settings }, config);
-	        _super.call(this, service, element, configCopy);
+	        _super.call(this, service, element, configCopy, iframe);
 	        this.loadPath = "/report/load";
 	        Array.prototype.push.apply(this.allowedEvents, Report.allowedEvents);
 	    }
@@ -918,7 +1081,38 @@ return /******/ (function(modules) { // webpackBootstrap
 	    Report.prototype.validate = function (config) {
 	        return models.validateReportLoad(config);
 	    };
-	    Report.allowedEvents = ["rendered", "dataSelected", "filtersApplied", "pageChanged", "error"];
+	    /**
+	     * Switch Report view mode.
+	     *
+	     * @returns {Promise<void>}
+	     */
+	    Report.prototype.switchMode = function (viewMode) {
+	        var url = '/report/switchMode/' + viewMode;
+	        return this.service.hpm.post(url, null, { uid: this.config.uniqueId }, this.iframe.contentWindow)
+	            .then(function (response) {
+	            return response.body;
+	        })
+	            .catch(function (response) {
+	            throw response.body;
+	        });
+	    };
+	    /**
+	    * Refreshes data sources for the report.
+	    *
+	    * ```javascript
+	    * report.refresh();
+	    * ```
+	    */
+	    Report.prototype.refresh = function () {
+	        return this.service.hpm.post('/report/refresh', null, { uid: this.config.uniqueId }, this.iframe.contentWindow)
+	            .then(function (response) {
+	            return response.body;
+	        })
+	            .catch(function (response) {
+	            throw response.body;
+	        });
+	    };
+	    Report.allowedEvents = ["filtersApplied", "pageChanged"];
 	    Report.reportIdAttribute = 'powerbi-report-id';
 	    Report.filterPaneEnabledAttribute = 'powerbi-settings-filter-pane-enabled';
 	    Report.navContentPaneEnabledAttribute = 'powerbi-settings-nav-content-pane-enabled';
@@ -929,11 +1123,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.Report = Report;
 
 
-/***/ },
+/***/ }),
 /* 5 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
-	/*! powerbi-models v0.11.0 | (c) 2016 Microsoft Corporation MIT */
+	/*! powerbi-models v0.11.2 | (c) 2016 Microsoft Corporation MIT */
 	(function webpackUniversalModuleDefinition(root, factory) {
 		if(true)
 			module.exports = factory();
@@ -988,13 +1182,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	/************************************************************************/
 	/******/ ([
 	/* 0 */
-	/***/ function(module, exports, __webpack_require__) {
+	/***/ (function(module, exports, __webpack_require__) {
 	
-		var __extends = (this && this.__extends) || function (d, b) {
-		    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-		    function __() { this.constructor = d; }
-		    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-		};
+		var __extends = (this && this.__extends) || (function () {
+		    var extendStatics = Object.setPrototypeOf ||
+		        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+		        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+		    return function (d, b) {
+		        extendStatics(d, b);
+		        function __() { this.constructor = d; }
+		        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+		    };
+		})();
+		Object.defineProperty(exports, "__esModule", { value: true });
 		/* tslint:disable:no-var-requires */
 		exports.advancedFilterSchema = __webpack_require__(1);
 		exports.filterSchema = __webpack_require__(2);
@@ -1035,12 +1235,12 @@ return /******/ (function(modules) { // webpackBootstrap
 		        advancedFilter: exports.advancedFilterSchema
 		    }
 		});
+		var FilterType;
 		(function (FilterType) {
 		    FilterType[FilterType["Advanced"] = 0] = "Advanced";
 		    FilterType[FilterType["Basic"] = 1] = "Basic";
 		    FilterType[FilterType["Unknown"] = 2] = "Unknown";
-		})(exports.FilterType || (exports.FilterType = {}));
-		var FilterType = exports.FilterType;
+		})(FilterType = exports.FilterType || (exports.FilterType = {}));
 		function isFilterKeyColumnsTarget(target) {
 		    return isColumn(target) && !!target.keys;
 		}
@@ -1098,9 +1298,9 @@ return /******/ (function(modules) { // webpackBootstrap
 		        for (var _i = 2; _i < arguments.length; _i++) {
 		            values[_i - 2] = arguments[_i];
 		        }
-		        _super.call(this, target);
-		        this.operator = operator;
-		        this.schemaUrl = BasicFilter.schemaUrl;
+		        var _this = _super.call(this, target) || this;
+		        _this.operator = operator;
+		        _this.schemaUrl = BasicFilter.schemaUrl;
 		        if (values.length === 0 && operator !== "All") {
 		            throw new Error("values must be a non-empty array unless your operator is \"All\".");
 		        }
@@ -1110,11 +1310,12 @@ return /******/ (function(modules) { // webpackBootstrap
 		         * new BasicFilter('a', 'b', [1,2]);
 		         */
 		        if (Array.isArray(values[0])) {
-		            this.values = values[0];
+		            _this.values = values[0];
 		        }
 		        else {
-		            this.values = values;
+		            _this.values = values;
 		        }
+		        return _this;
 		    }
 		    BasicFilter.prototype.toJSON = function () {
 		        var filter = _super.prototype.toJSON.call(this);
@@ -1122,16 +1323,16 @@ return /******/ (function(modules) { // webpackBootstrap
 		        filter.values = this.values;
 		        return filter;
 		    };
-		    BasicFilter.schemaUrl = "http://powerbi.com/product/schema#basic";
 		    return BasicFilter;
 		}(Filter));
+		BasicFilter.schemaUrl = "http://powerbi.com/product/schema#basic";
 		exports.BasicFilter = BasicFilter;
 		var BasicFilterWithKeys = (function (_super) {
 		    __extends(BasicFilterWithKeys, _super);
 		    function BasicFilterWithKeys(target, operator, values, keyValues) {
-		        _super.call(this, target, operator, values);
-		        this.keyValues = keyValues;
-		        this.target = target;
+		        var _this = _super.call(this, target, operator, values) || this;
+		        _this.keyValues = keyValues;
+		        _this.target = target;
 		        var numberOfKeys = target.keys ? target.keys.length : 0;
 		        if (numberOfKeys > 0 && !keyValues) {
 		            throw new Error("You shold pass the values to be filtered for each key. You passed: no values and " + numberOfKeys + " keys");
@@ -1139,14 +1340,15 @@ return /******/ (function(modules) { // webpackBootstrap
 		        if (numberOfKeys === 0 && keyValues && keyValues.length > 0) {
 		            throw new Error("You passed key values but your target object doesn't contain the keys to be filtered");
 		        }
-		        for (var i = 0; i < this.keyValues.length; i++) {
-		            if (this.keyValues[i]) {
-		                var lengthOfArray = this.keyValues[i].length;
+		        for (var i = 0; i < _this.keyValues.length; i++) {
+		            if (_this.keyValues[i]) {
+		                var lengthOfArray = _this.keyValues[i].length;
 		                if (lengthOfArray !== numberOfKeys) {
 		                    throw new Error("Each tuple of key values should contain a value for each of the keys. You passed: " + lengthOfArray + " values and " + numberOfKeys + " keys");
 		                }
 		            }
 		        }
+		        return _this;
 		    }
 		    BasicFilterWithKeys.prototype.toJSON = function () {
 		        var filter = _super.prototype.toJSON.call(this);
@@ -1163,14 +1365,14 @@ return /******/ (function(modules) { // webpackBootstrap
 		        for (var _i = 2; _i < arguments.length; _i++) {
 		            conditions[_i - 2] = arguments[_i];
 		        }
-		        _super.call(this, target);
-		        this.schemaUrl = AdvancedFilter.schemaUrl;
+		        var _this = _super.call(this, target) || this;
+		        _this.schemaUrl = AdvancedFilter.schemaUrl;
 		        // Guard statements
 		        if (typeof logicalOperator !== "string" || logicalOperator.length === 0) {
 		            // TODO: It would be nicer to list out the possible logical operators.
 		            throw new Error("logicalOperator must be a valid operator, You passed: " + logicalOperator);
 		        }
-		        this.logicalOperator = logicalOperator;
+		        _this.logicalOperator = logicalOperator;
 		        var extractedConditions;
 		        /**
 		         * Accept conditions as array instead of as individual arguments
@@ -1192,7 +1394,8 @@ return /******/ (function(modules) { // webpackBootstrap
 		        if (extractedConditions.length === 1 && logicalOperator !== "And") {
 		            throw new Error("Logical Operator must be \"And\" when there is only one condition provided");
 		        }
-		        this.conditions = extractedConditions;
+		        _this.conditions = extractedConditions;
+		        return _this;
 		    }
 		    AdvancedFilter.prototype.toJSON = function () {
 		        var filter = _super.prototype.toJSON.call(this);
@@ -1200,29 +1403,34 @@ return /******/ (function(modules) { // webpackBootstrap
 		        filter.conditions = this.conditions;
 		        return filter;
 		    };
-		    AdvancedFilter.schemaUrl = "http://powerbi.com/product/schema#advanced";
 		    return AdvancedFilter;
 		}(Filter));
+		AdvancedFilter.schemaUrl = "http://powerbi.com/product/schema#advanced";
 		exports.AdvancedFilter = AdvancedFilter;
+		var Permissions;
 		(function (Permissions) {
 		    Permissions[Permissions["Read"] = 0] = "Read";
 		    Permissions[Permissions["ReadWrite"] = 1] = "ReadWrite";
 		    Permissions[Permissions["Copy"] = 2] = "Copy";
 		    Permissions[Permissions["Create"] = 4] = "Create";
 		    Permissions[Permissions["All"] = 7] = "All";
-		})(exports.Permissions || (exports.Permissions = {}));
-		var Permissions = exports.Permissions;
+		})(Permissions = exports.Permissions || (exports.Permissions = {}));
+		var ViewMode;
 		(function (ViewMode) {
 		    ViewMode[ViewMode["View"] = 0] = "View";
 		    ViewMode[ViewMode["Edit"] = 1] = "Edit";
-		})(exports.ViewMode || (exports.ViewMode = {}));
-		var ViewMode = exports.ViewMode;
+		})(ViewMode = exports.ViewMode || (exports.ViewMode = {}));
+		var TokenType;
+		(function (TokenType) {
+		    TokenType[TokenType["Aad"] = 0] = "Aad";
+		    TokenType[TokenType["Embed"] = 1] = "Embed";
+		})(TokenType = exports.TokenType || (exports.TokenType = {}));
 		exports.validateSaveAsParameters = validate(exports.saveAsParametersSchema);
 	
 	
-	/***/ },
+	/***/ }),
 	/* 1 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1314,9 +1522,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			]
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 2 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1331,9 +1539,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			"invalidMessage": "filter is invalid"
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 3 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1397,6 +1605,15 @@ return /******/ (function(modules) { // webpackBootstrap
 					],
 					"default": 0,
 					"invalidMessage": "viewMode property is invalid"
+				},
+				"tokenType": {
+					"type": "number",
+					"enum": [
+						0,
+						1
+					],
+					"default": 0,
+					"invalidMessage": "tokenType property is invalid"
 				}
 			},
 			"required": [
@@ -1405,9 +1622,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			]
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 4 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1432,6 +1649,15 @@ return /******/ (function(modules) { // webpackBootstrap
 					"messages": {
 						"type": "pageView must be a string with one of the following values: \"actualSize\", \"fitToWidth\", \"oneColumn\""
 					}
+				},
+				"tokenType": {
+					"type": "number",
+					"enum": [
+						0,
+						1
+					],
+					"default": 0,
+					"invalidMessage": "tokenType property is invalid"
 				}
 			},
 			"required": [
@@ -1440,9 +1666,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			]
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 5 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1461,9 +1687,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			]
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 6 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1490,9 +1716,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			}
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 7 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1542,9 +1768,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			]
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 8 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1563,6 +1789,15 @@ return /******/ (function(modules) { // webpackBootstrap
 						"type": "datasetId must be a string",
 						"required": "datasetId is required"
 					}
+				},
+				"tokenType": {
+					"type": "number",
+					"enum": [
+						0,
+						1
+					],
+					"default": 0,
+					"invalidMessage": "tokenType property is invalid"
 				}
 			},
 			"required": [
@@ -1571,9 +1806,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			]
 		};
 	
-	/***/ },
+	/***/ }),
 	/* 9 */
-	/***/ function(module, exports) {
+	/***/ (function(module, exports) {
 	
 		module.exports = {
 			"$schema": "http://json-schema.org/draft-04/schema#",
@@ -1592,15 +1827,15 @@ return /******/ (function(modules) { // webpackBootstrap
 			]
 		};
 	
-	/***/ }
+	/***/ })
 	/******/ ])
 	});
 	;
 	//# sourceMappingURL=models.js.map
 
-/***/ },
+/***/ }),
 /* 6 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/**
 	 * A Power BI report page
@@ -1692,9 +1927,67 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.Page = Page;
 
 
-/***/ },
+/***/ }),
 /* 7 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
+
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+	};
+	var models = __webpack_require__(5);
+	var embed = __webpack_require__(2);
+	var Create = (function (_super) {
+	    __extends(Create, _super);
+	    function Create(service, element, config) {
+	        _super.call(this, service, element, config);
+	    }
+	    /**
+	     * Gets the dataset ID from the first available location: createConfig or embed url.
+	     *
+	     * @returns {string}
+	     */
+	    Create.prototype.getId = function () {
+	        var datasetId = (this.createConfig && this.createConfig.datasetId) ? this.createConfig.datasetId : Create.findIdFromEmbedUrl(this.config.embedUrl);
+	        if (typeof datasetId !== 'string' || datasetId.length === 0) {
+	            throw new Error('Dataset id is required, but it was not found. You must provide an id either as part of embed configuration.');
+	        }
+	        return datasetId;
+	    };
+	    /**
+	     * Validate create report configuration.
+	     */
+	    Create.prototype.validate = function (config) {
+	        return models.validateCreateReport(config);
+	    };
+	    /**
+	     * Adds the ability to get datasetId from url.
+	     * (e.g. http://embedded.powerbi.com/appTokenReportEmbed?datasetId=854846ed-2106-4dc2-bc58-eb77533bf2f1).
+	     *
+	     * By extracting the ID we can ensure that the ID is always explicitly provided as part of the create configuration.
+	     *
+	     * @static
+	     * @param {string} url
+	     * @returns {string}
+	     */
+	    Create.findIdFromEmbedUrl = function (url) {
+	        var datasetIdRegEx = /datasetId="?([^&]+)"?/;
+	        var datasetIdMatch = url.match(datasetIdRegEx);
+	        var datasetId;
+	        if (datasetIdMatch) {
+	            datasetId = datasetIdMatch[1];
+	        }
+	        return datasetId;
+	    };
+	    return Create;
+	}(embed.Embed));
+	exports.Create = Create;
+
+
+/***/ }),
+/* 8 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	var __extends = (this && this.__extends) || function (d, b) {
 	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1780,16 +2073,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.Dashboard = Dashboard;
 
 
-/***/ },
-/* 8 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ }),
+/* 9 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	var __extends = (this && this.__extends) || function (d, b) {
 	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var embed_1 = __webpack_require__(2);
+	var models = __webpack_require__(5);
+	var embed = __webpack_require__(2);
 	/**
 	 * The Power BI tile embed component
 	 *
@@ -1799,8 +2093,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	var Tile = (function (_super) {
 	    __extends(Tile, _super);
-	    function Tile() {
-	        _super.apply(this, arguments);
+	    function Tile(service, element, config) {
+	        var url = config.embedUrl;
+	        var urlParamMatch = url.indexOf("?") > 0;
+	        var firstParamSign = urlParamMatch ? '&' : '?';
+	        url = url + firstParamSign + 'dashboardId=' + config.dashboardId + '&tileId=' + config.id;
+	        config.embedUrl = url;
+	        _super.call(this, service, element, config);
+	        Array.prototype.push.apply(this.allowedEvents, Tile.allowedEvents);
+	        window.addEventListener("message", this.receiveMessage.bind(this), false);
 	    }
 	    /**
 	     * The ID of the tile
@@ -1808,28 +2109,108 @@ return /******/ (function(modules) { // webpackBootstrap
 	     * @returns {string}
 	     */
 	    Tile.prototype.getId = function () {
-	        throw new Error('Not implemented. Embedding tiles is not supported yet.');
+	        var tileId = this.config.id || Tile.findIdFromEmbedUrl(this.config.embedUrl);
+	        if (typeof tileId !== 'string' || tileId.length === 0) {
+	            throw new Error("Tile id is required, but it was not found. You must provide an id either as part of embed configuration.");
+	        }
+	        return tileId;
 	    };
 	    /**
 	     * Validate load configuration.
 	     */
 	    Tile.prototype.validate = function (config) {
-	        throw new Error('Not implemented. Embedding tiles is not supported yet.');
+	        // we create load tile configuration from report load configuration
+	        // so we need to validate it
+	        return models.validateReportLoad(config);
+	    };
+	    /**
+	     * Sends load configuration data for tile
+	     *
+	     * @param {models.ILoadConfiguration} config
+	     * @returns {Promise<void>}
+	     */
+	    Tile.prototype.load = function (config) {
+	        var errors = this.validate(config);
+	        if (errors) {
+	            throw errors;
+	        }
+	        var height = config.height ? config.height : this.iframe.offsetHeight;
+	        var width = config.width ? config.width : this.iframe.offsetWidth;
+	        var action = config.action ? config.action : 'loadTile';
+	        var tileConfig = {
+	            action: action,
+	            height: height,
+	            width: width,
+	            accessToken: config.accessToken,
+	            tokenType: config.tokenType,
+	        };
+	        this.iframe.contentWindow.postMessage(JSON.stringify(tileConfig), "*");
+	        // In order to use this function the same way we use it in embed
+	        // we need to keep the return type the same as 'load' in embed 
+	        return new Promise(function () {
+	            return;
+	        });
+	    };
+	    /**
+	     * Adds the ability to get tileId from url.
+	     * By extracting the ID we can ensure that the ID is always explicitly provided as part of the load configuration.
+	     *
+	     * @static
+	     * @param {string} url
+	     * @returns {string}
+	     */
+	    Tile.findIdFromEmbedUrl = function (url) {
+	        var tileIdRegEx = /tileId="?([^&]+)"?/;
+	        var tileIdMatch = url.match(tileIdRegEx);
+	        var tileId;
+	        if (tileIdMatch) {
+	            tileId = tileIdMatch[1];
+	        }
+	        return tileId;
+	    };
+	    /**
+	     * Adds the ability to get events from iframe
+	     *
+	     * @param event: MessageEvent
+	     */
+	    Tile.prototype.receiveMessage = function (event) {
+	        if (event.data) {
+	            try {
+	                var messageData = JSON.parse(event.data);
+	                var value = {
+	                    navigationUrl: messageData.navigationUrl,
+	                    errors: messageData.error,
+	                    openReport: messageData.openReport
+	                };
+	                var tileEvent = {
+	                    type: 'tile',
+	                    id: this.config.uniqueId,
+	                    name: messageData.event,
+	                    value: value
+	                };
+	                this.service.handleTileEvents(tileEvent);
+	            }
+	            catch (e) {
+	                console.log("invalid message data");
+	                return;
+	            }
+	        }
 	    };
 	    Tile.type = "Tile";
+	    Tile.allowedEvents = ["tileClicked", "tileLoaded"];
 	    return Tile;
-	}(embed_1.Embed));
+	}(embed.Embed));
 	exports.Tile = Tile;
 
 
-/***/ },
-/* 9 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ }),
+/* 10 */
+/***/ (function(module, exports, __webpack_require__) {
 
-	var config_1 = __webpack_require__(10);
-	var wpmp = __webpack_require__(11);
-	var hpm = __webpack_require__(12);
-	var router = __webpack_require__(13);
+	var config_1 = __webpack_require__(11);
+	var wpmp = __webpack_require__(12);
+	var hpm = __webpack_require__(13);
+	var router = __webpack_require__(14);
 	exports.hpmFactory = function (wpmp, defaultTargetWindow, sdkVersion, sdkType) {
 	    if (sdkVersion === void 0) { sdkVersion = config_1.default.version; }
 	    if (sdkType === void 0) { sdkType = config_1.default.type; }
@@ -1855,21 +2236,21 @@ return /******/ (function(modules) { // webpackBootstrap
 	};
 
 
-/***/ },
-/* 10 */
-/***/ function(module, exports) {
+/***/ }),
+/* 11 */
+/***/ (function(module, exports) {
 
 	var config = {
-	    version: '2.2.6',
+	    version: '2.3.1',
 	    type: 'js'
 	};
 	Object.defineProperty(exports, "__esModule", { value: true });
 	exports.default = config;
 
 
-/***/ },
-/* 11 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ }),
+/* 12 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*! window-post-message-proxy v0.2.4 | (c) 2016 Microsoft Corporation MIT */
 	(function webpackUniversalModuleDefinition(root, factory) {
@@ -2167,9 +2548,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	;
 	//# sourceMappingURL=windowPostMessageProxy.js.map
 
-/***/ },
-/* 12 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ }),
+/* 13 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*! http-post-message v0.2.3 | (c) 2016 Microsoft Corporation MIT */
 	(function webpackUniversalModuleDefinition(root, factory) {
@@ -2351,9 +2732,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	;
 	//# sourceMappingURL=httpPostMessage.js.map
 
-/***/ },
-/* 13 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ }),
+/* 14 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*! powerbi-router v0.1.5 | (c) 2016 Microsoft Corporation MIT */
 	(function webpackUniversalModuleDefinition(root, factory) {
@@ -3174,7 +3555,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	;
 	//# sourceMappingURL=router.js.map
 
-/***/ }
+/***/ })
 /******/ ])
 });
 ;
